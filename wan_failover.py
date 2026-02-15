@@ -25,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -212,6 +213,83 @@ def check_gateway_health(link: WANLink, timeout: float) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Interface traffic statistics
+# ---------------------------------------------------------------------------
+
+def _read_sys_counter(interface: str, counter: str) -> Optional[int]:
+    """Read a byte counter from /sys/class/net/<iface>/statistics/."""
+    path = f"/sys/class/net/{interface}/statistics/{counter}"
+    try:
+        with open(path, "r") as f:
+            return int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+class InterfaceStats:
+    """
+    Tracks RX/TX throughput for a network interface.
+
+    Each call to sample() reads the kernel byte counters and computes
+    instantaneous Mbps since the last sample.  The last ~60 seconds of
+    samples are kept to provide a rolling average.
+    """
+
+    def __init__(self, interface: str, avg_window: int = 20):
+        self.interface = interface
+        self._prev_rx: Optional[int] = None
+        self._prev_tx: Optional[int] = None
+        self._prev_time: Optional[float] = None
+        # Current (instantaneous) values
+        self.rx_mbps: float = 0.0
+        self.tx_mbps: float = 0.0
+        # Rolling average buffer (stores (rx, tx) tuples)
+        self._history: deque[tuple[float, float]] = deque(maxlen=avg_window)
+        self.rx_mbps_avg: float = 0.0
+        self.tx_mbps_avg: float = 0.0
+
+    def sample(self):
+        """Take a measurement and update current + average Mbps."""
+        rx = _read_sys_counter(self.interface, "rx_bytes")
+        tx = _read_sys_counter(self.interface, "tx_bytes")
+        now = time.time()
+
+        if rx is None or tx is None:
+            return
+
+        if self._prev_rx is not None and self._prev_time is not None:
+            dt = now - self._prev_time
+            if dt > 0:
+                rx_bytes = rx - self._prev_rx
+                tx_bytes = tx - self._prev_tx
+                # Handle counter wrap (unlikely with 64-bit counters but be safe)
+                if rx_bytes < 0:
+                    rx_bytes = 0
+                if tx_bytes < 0:
+                    tx_bytes = 0
+                self.rx_mbps = round((rx_bytes * 8) / (dt * 1_000_000), 3)
+                self.tx_mbps = round((tx_bytes * 8) / (dt * 1_000_000), 3)
+
+                self._history.append((self.rx_mbps, self.tx_mbps))
+                if self._history:
+                    n = len(self._history)
+                    self.rx_mbps_avg = round(sum(r for r, _ in self._history) / n, 3)
+                    self.tx_mbps_avg = round(sum(t for _, t in self._history) / n, 3)
+
+        self._prev_rx = rx
+        self._prev_tx = tx
+        self._prev_time = now
+
+    def as_dict(self) -> dict:
+        return {
+            "rx_mbps": self.rx_mbps,
+            "tx_mbps": self.tx_mbps,
+            "rx_mbps_avg": self.rx_mbps_avg,
+            "tx_mbps_avg": self.tx_mbps_avg,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Gateway discovery
 # ---------------------------------------------------------------------------
 
@@ -334,6 +412,12 @@ class FailoverEngine:
         self._event_log: list = []
         self._max_events: int = 100
 
+        # Interface traffic stats
+        self._stats: dict[str, InterfaceStats] = {
+            cfg.primary.interface: InterfaceStats(cfg.primary.interface),
+            cfg.secondary.interface: InterfaceStats(cfg.secondary.interface),
+        }
+
         # Discover gateways and detect which link is currently active
         self._refresh_gateways()
         self._detect_active_link()
@@ -418,7 +502,8 @@ class FailoverEngine:
 
     def _link_status(self, link: WANLink) -> dict:
         """Build status dict for a single link."""
-        return {
+        stats = self._stats.get(link.interface)
+        result = {
             "name": link.name,
             "display_name": link.label,
             "interface": link.interface,
@@ -430,6 +515,9 @@ class FailoverEngine:
             "consecutive_successes": link.consecutive_successes,
             "last_check": datetime.fromtimestamp(link.last_check, tz=timezone.utc).isoformat() if link.last_check else None,
         }
+        if stats:
+            result["traffic"] = stats.as_dict()
+        return result
 
     def get_status(self) -> dict:
         with self.lock:
@@ -484,6 +572,10 @@ class FailoverEngine:
     def run_check_cycle(self):
         """Run a single health check cycle. Called by the main loop."""
         with self.lock:
+            # Sample interface traffic counters
+            for stats in self._stats.values():
+                stats.sample()
+
             # Refresh gateways (DHCP may have changed them)
             self._refresh_gateways()
 

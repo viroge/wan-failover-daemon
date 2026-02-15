@@ -8,6 +8,7 @@ Automatic WAN failover daemon for Linux systems with dual internet connections. 
 - **Automatic recovery** — switches back to primary when it's stable again (configurable hysteresis)
 - **Dynamic gateway detection** — discovers gateways via dhclient hook or routing table, works with DHCP
 - **Two-level health monitoring** — tracks gateway reachability and internet connectivity separately
+- **Interface traffic stats** — per-link RX/TX throughput in Mbps (instantaneous + rolling average)
 - **Custom link names** — label your connections (e.g. "Telekom", "Digi") for readable logs and API
 - **REST API** — status, manual switch, enable/disable auto-failover
 - **Home Assistant ready** — integrates via REST sensors and switches
@@ -99,6 +100,8 @@ Response includes per-link:
 - `gateway` — current gateway IP (auto-detected)
 - `healthy` — internet reachable (true/false)
 - `gateway_reachable` — gateway responds to ping (true/false)
+- `traffic.rx_mbps` / `traffic.tx_mbps` — instantaneous throughput (Mbps)
+- `traffic.rx_mbps_avg` / `traffic.tx_mbps_avg` — rolling ~60s average (Mbps)
 
 ### GET /api/health
 
@@ -165,8 +168,20 @@ rest:
           - last_check
       - name: "WAN Primary Healthy"
         value_template: "{{ value_json.primary.healthy }}"
+      - name: "WAN Primary RX Mbps"
+        value_template: "{{ value_json.primary.traffic.rx_mbps_avg }}"
+        unit_of_measurement: "Mbps"
+      - name: "WAN Primary TX Mbps"
+        value_template: "{{ value_json.primary.traffic.tx_mbps_avg }}"
+        unit_of_measurement: "Mbps"
       - name: "WAN Secondary Healthy"
         value_template: "{{ value_json.secondary.healthy }}"
+      - name: "WAN Secondary RX Mbps"
+        value_template: "{{ value_json.secondary.traffic.rx_mbps_avg }}"
+        unit_of_measurement: "Mbps"
+      - name: "WAN Secondary TX Mbps"
+        value_template: "{{ value_json.secondary.traffic.tx_mbps_avg }}"
+        unit_of_measurement: "Mbps"
       - name: "WAN Auto Failover"
         value_template: "{{ value_json.auto_enabled }}"
       - name: "WAN Switch Count"
