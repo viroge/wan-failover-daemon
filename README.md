@@ -147,32 +147,26 @@ rest:
         value_template: >
           {{ value_json.primary.display_name }}:
           gw={{ value_json.primary.gateway or 'unknown' }}
-        attributes:
-          - name: healthy
-            value_template: "{{ value_json.primary.healthy }}"
-          - name: gateway_reachable
-            value_template: "{{ value_json.primary.gateway_reachable }}"
-          - name: gateway_ip
-            value_template: "{{ value_json.primary.gateway }}"
+        json_attributes_path: "$.primary"
+        json_attributes:
+          - healthy
+          - gateway_reachable
+          - gateway_ip
+          - last_check
       - name: "WAN Secondary Gateway"
         value_template: >
           {{ value_json.secondary.display_name }}:
           gw={{ value_json.secondary.gateway or 'unknown' }}
-        attributes:
-          - name: healthy
-            value_template: "{{ value_json.secondary.healthy }}"
-          - name: gateway_reachable
-            value_template: "{{ value_json.secondary.gateway_reachable }}"
-          - name: gateway_ip
-            value_template: "{{ value_json.secondary.gateway }}"
+        json_attributes_path: "$.secondary"
+        json_attributes:
+          - healthy
+          - gateway_reachable
+          - gateway_ip
+          - last_check
       - name: "WAN Primary Healthy"
         value_template: "{{ value_json.primary.healthy }}"
-      - name: "WAN Primary GW Reachable"
-        value_template: "{{ value_json.primary.gateway_reachable }}"
       - name: "WAN Secondary Healthy"
         value_template: "{{ value_json.secondary.healthy }}"
-      - name: "WAN Secondary GW Reachable"
-        value_template: "{{ value_json.secondary.gateway_reachable }}"
       - name: "WAN Auto Failover"
         value_template: "{{ value_json.auto_enabled }}"
       - name: "WAN Switch Count"

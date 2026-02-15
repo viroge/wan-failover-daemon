@@ -423,10 +423,12 @@ class FailoverEngine:
             "display_name": link.label,
             "interface": link.interface,
             "gateway": link.gateway,
+            "gateway_ip": link.gateway,
             "healthy": link.healthy,
             "gateway_reachable": link.gateway_reachable,
             "consecutive_failures": link.consecutive_failures,
             "consecutive_successes": link.consecutive_successes,
+            "last_check": datetime.fromtimestamp(link.last_check, tz=timezone.utc).isoformat() if link.last_check else None,
         }
 
     def get_status(self) -> dict:
