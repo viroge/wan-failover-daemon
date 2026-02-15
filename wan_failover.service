@@ -1,0 +1,22 @@
+[Unit]
+Description=WAN Failover Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/wan-failover/wan_failover.py --config /etc/wan-failover/config.yaml
+Restart=always
+RestartSec=5
+# Runs as root because it needs ip route access
+# Harden as much as possible anyway:
+ProtectSystem=strict
+ReadWritePaths=/var/log/wan-failover /var/lib/wan-failover
+LogsDirectory=wan-failover
+ProtectHome=true
+NoNewPrivileges=false
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

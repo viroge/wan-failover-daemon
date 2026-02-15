@@ -1,0 +1,43 @@
+# WAN Failover Daemon - Configuration
+# Copy this file to /etc/wan-failover/config.yaml and edit to match your setup.
+
+# Primary WAN connection (preferred)
+# Gateway is auto-detected via the dhclient exit hook (or from the routing table).
+primary:
+  name: primary
+  interface: eth0          # Network interface name
+  display_name: Telekom    # Friendly label (shown in logs & API)
+
+# Secondary WAN connection (fallback)
+secondary:
+  name: secondary
+  interface: eth1
+  display_name: Digi
+
+# Health check targets (at least one must be reachable for a link to be "healthy")
+ping_targets:
+  - 8.8.8.8       # Google DNS
+  - 1.1.1.1       # Cloudflare DNS
+  - 9.9.9.9       # Quad9 DNS
+
+# Health check tuning
+ping_timeout: 1.5        # Seconds per ping attempt
+ping_count: 1            # Number of pings per target
+check_interval: 3.0      # Seconds between health check cycles
+
+# Failover thresholds
+failure_threshold: 3     # Consecutive failures before declaring a link down
+recovery_threshold: 5    # Consecutive successes before switching back to primary
+min_secondary_time: 30.0 # Minimum seconds to stay on secondary before trying primary again
+
+# Gateway state directory (dhclient hook writes gateway info here)
+gateway_state_dir: /var/lib/wan-failover
+
+# REST API (for Home Assistant or other integrations)
+api_host: "0.0.0.0"
+api_port: 8780
+api_key: "CHANGE_ME_TO_A_RANDOM_STRING"   # IMPORTANT: change this!
+
+# Logging
+log_file: /var/log/wan-failover/wan-failover.log
+log_level: INFO          # DEBUG, INFO, WARNING, ERROR

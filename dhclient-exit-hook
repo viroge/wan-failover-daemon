@@ -1,0 +1,35 @@
+#!/bin/bash
+# /etc/dhcp/dhclient-exit-hooks.d/wan-failover
+#
+# Saves the gateway (router) received via DHCP to a state file so the
+# wan-failover daemon can discover it without parsing the routing table.
+#
+# State file: /var/lib/wan-failover/<interface>.json
+# Format:     {"gateway": "x.x.x.x", "dhcp_server": "y.y.y.y", "timestamp": "..."}
+
+STATE_DIR="/var/lib/wan-failover"
+
+# Only act on events where we have routing info
+case "$reason" in
+    BOUND|RENEW|REBIND|REBOOT)
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+
+# $interface and $new_routers are set by dhclient
+if [ -z "$interface" ] || [ -z "$new_routers" ]; then
+    exit 0
+fi
+
+mkdir -p "$STATE_DIR"
+
+# Pick the first router if multiple were offered
+GATEWAY=$(echo "$new_routers" | awk '{print $1}')
+DHCP_SERVER="${new_dhcp_server_identifier:-unknown}"
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+cat > "${STATE_DIR}/${interface}.json" <<EOF
+{"gateway": "${GATEWAY}", "dhcp_server": "${DHCP_SERVER}", "timestamp": "${TIMESTAMP}"}
+EOF
